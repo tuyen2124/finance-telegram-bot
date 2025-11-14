@@ -122,14 +122,40 @@ class Database:
         dsn: DATABASE_URL từ Neon, dạng: postgres://user:password@host/db?sslmode=require
         """
         self.dsn = dsn
-        self.conn = psycopg2.connect(
-            self.dsn, cursor_factory=psycopg2.extras.RealDictCursor
-        )
-        self.conn.autocommit = True
+        self.conn: psycopg2.extensions.connection | None = None
+        self._connect()
         self._create_tables()
 
+    def _connect(self):
+        """
+        Đảm bảo luôn có connection sống tới DB.
+        Nếu connection đang đóng/None -> tạo mới.
+        """
+        if self.conn is not None and self.conn.closed == 0:
+            return
+        self.conn = psycopg2.connect(
+            self.dsn,
+            cursor_factory=psycopg2.extras.RealDictCursor,
+        )
+        self.conn.autocommit = True
+
+    def _cursor(self):
+        """
+        Lấy cursor an toàn:
+        - Nếu connection đã bị đóng do timeout -> reconnect.
+        - Nếu gặp OperationalError khi tạo cursor -> reconnect rồi thử lại.
+        """
+        try:
+            self._connect()
+            return self.conn.cursor()
+        except psycopg2.OperationalError:
+            # Nếu connection chết giữa chừng, reconnect rồi thử lại
+            self.conn = None
+            self._connect()
+            return self.conn.cursor()
+
     def _create_tables(self):
-        cur = self.conn.cursor()
+        cur = self._cursor()
 
         # Người dùng
         cur.execute(
@@ -244,7 +270,7 @@ class Database:
     # --- USER ---
 
     def get_or_create_user(self, telegram_id: int, full_name: str | None) -> int:
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute("SELECT id FROM users WHERE telegram_id = %s", (telegram_id,))
         row = cur.fetchone()
         if row:
@@ -264,7 +290,7 @@ class Database:
         return user_id
 
     def get_user_id(self, telegram_id: int) -> Optional[int]:
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute("SELECT id FROM users WHERE telegram_id = %s", (telegram_id,))
         row = cur.fetchone()
         return row["id"] if row else None
@@ -272,7 +298,7 @@ class Database:
     # --- CATEGORIES ---
 
     def ensure_default_categories(self, user_id: int):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             "SELECT COUNT(*) AS c FROM categories WHERE user_id = %s",
             (user_id,),
@@ -294,7 +320,7 @@ class Database:
             )
 
     def get_categories(self, user_id: int, cat_type: Optional[str] = None):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         if cat_type:
             cur.execute(
                 """
@@ -316,14 +342,14 @@ class Database:
         return cur.fetchall()
 
     def add_category(self, user_id: int, name: str, cat_type: str):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             "INSERT INTO categories (user_id, name, type) VALUES (%s, %s, %s)",
             (user_id, name, cat_type),
         )
 
     def delete_category(self, user_id: int, cat_id: int):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             "DELETE FROM categories WHERE id = %s AND user_id = %s",
             (cat_id, user_id),
@@ -332,7 +358,7 @@ class Database:
     # --- WALLETS (VÍ) ---
 
     def ensure_default_wallets(self, user_id: int):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute("SELECT COUNT(*) AS c FROM wallets WHERE user_id = %s", (user_id,))
         c = cur.fetchone()["c"]
         if c > 0:
@@ -355,7 +381,7 @@ class Database:
             )
 
     def get_wallets(self, user_id: int):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             SELECT id, name, purpose
@@ -368,7 +394,7 @@ class Database:
         return cur.fetchall()
 
     def get_wallet(self, user_id: int, wallet_id: int):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             SELECT id, name, purpose
@@ -380,7 +406,7 @@ class Database:
         return cur.fetchone()
 
     def add_wallet(self, user_id: int, name: str, purpose: str = ""):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         now = datetime.utcnow()
         cur.execute(
             """
@@ -393,7 +419,7 @@ class Database:
         return cur.fetchone()["id"]
 
     def get_wallet_balance(self, user_id: int, wallet_id: int) -> float:
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             SELECT COALESCE(SUM(CASE WHEN type='income' THEN amount ELSE -amount END), 0) AS bal
@@ -416,7 +442,7 @@ class Database:
         note: str,
         wallet_id: Optional[int] = None,
     ):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         now = datetime.utcnow()
         cur.execute(
             """
@@ -429,7 +455,7 @@ class Database:
         return cur.fetchone()["id"]
 
     def get_balance(self, user_id: int) -> float:
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             "SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE user_id=%s AND type='income'",
             (user_id,),
@@ -443,7 +469,7 @@ class Database:
         return float(inc) - float(exp)
 
     def get_summary(self, user_id: int, start: datetime, end: datetime) -> dict:
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             SELECT type, COALESCE(SUM(amount),0) AS total
@@ -464,7 +490,7 @@ class Database:
             last = datetime(year + 1, 1, 1)
         else:
             last = datetime(year, month + 1, 1)
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             SELECT category, COALESCE(SUM(amount),0) AS total
@@ -479,7 +505,7 @@ class Database:
         return cur.fetchall()
 
     def get_recent_transactions(self, user_id: int, limit: int = 5):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             SELECT id, type, amount, category, note, wallet_id, created_at
@@ -493,7 +519,7 @@ class Database:
         return cur.fetchall()
 
     def get_transaction(self, user_id: int, tx_id: int):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             SELECT id, type, amount, category, note, wallet_id, created_at
@@ -505,28 +531,28 @@ class Database:
         return cur.fetchone()
 
     def delete_transaction(self, user_id: int, tx_id: int):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             "DELETE FROM transactions WHERE id=%s AND user_id=%s",
             (tx_id, user_id),
         )
 
     def update_transaction_amount(self, user_id: int, tx_id: int, amount: float):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             "UPDATE transactions SET amount=%s WHERE id=%s AND user_id=%s",
             (amount, tx_id, user_id),
         )
 
     def update_transaction_category(self, user_id: int, tx_id: int, category: str):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             "UPDATE transactions SET category=%s WHERE id=%s AND user_id=%s",
             (category, tx_id, user_id),
         )
 
     def update_transaction_note(self, user_id: int, tx_id: int, note: str):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             "UPDATE transactions SET note=%s WHERE id=%s AND user_id=%s",
             (note, tx_id, user_id),
@@ -535,7 +561,7 @@ class Database:
     # --- LIMITS ---
 
     def set_limit(self, user_id: int, category: str, period: str, limit_amount: float):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             SELECT id FROM limits
@@ -559,7 +585,7 @@ class Database:
             )
 
     def get_limit(self, user_id: int, category: str, period: str):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             SELECT limit_amount FROM limits
@@ -578,7 +604,7 @@ class Database:
             last = datetime(year + 1, 1, 1)
         else:
             last = datetime(year, month + 1, 1)
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             SELECT COALESCE(SUM(amount),0) AS total
@@ -596,7 +622,7 @@ class Database:
 
     def create_saving_goal(self, user_id: int, name: str, target_amount: float):
         now = datetime.utcnow()
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             INSERT INTO saving_goals (user_id, name, target_amount, current_amount, created_at)
@@ -606,7 +632,7 @@ class Database:
         )
 
     def get_saving_goals(self, user_id: int):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             SELECT id, name, target_amount, current_amount
@@ -619,7 +645,7 @@ class Database:
         return cur.fetchall()
 
     def get_goal(self, goal_id: int):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             SELECT id, user_id, name, target_amount, current_amount
@@ -631,7 +657,7 @@ class Database:
         return cur.fetchone()
 
     def update_goal_amount(self, goal_id: int, new_amount: float):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             "UPDATE saving_goals SET current_amount=%s WHERE id=%s",
             (new_amount, goal_id),
@@ -639,7 +665,7 @@ class Database:
 
     def add_goal_transaction(self, goal_id: int, tx_type: str, amount: float, note: str):
         now = datetime.utcnow()
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             INSERT INTO saving_goal_transactions (goal_id, type, amount, note, created_at)
@@ -658,7 +684,7 @@ class Database:
         personal: float,
     ):
         now = datetime.utcnow()
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             INSERT INTO budgets (user_id, total_income, essential, long_term, invest, personal, created_at)
@@ -670,7 +696,7 @@ class Database:
     # --- EXPORT CSV ---
 
     def get_all_transactions_for_export(self, user_id: int):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             SELECT
@@ -696,7 +722,7 @@ class Database:
             last = datetime(year + 1, 1, 1)
         else:
             last = datetime(year, month + 1, 1)
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             SELECT
@@ -718,7 +744,7 @@ class Database:
         return cur.fetchall()
 
     def get_transactions_for_wallet_export(self, user_id: int, wallet_id: int):
-        cur = self.conn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             SELECT
@@ -2665,5 +2691,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
