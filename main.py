@@ -7,8 +7,6 @@
 # - Xuất CSV: /export (toàn bộ), /export_month (theo tháng), /export_wallet (theo ví)
 # - Tính năng thêm: /wallets_add, /transfer, /insights, /backup (CSV)
 # - Webhook với aiogram v3 + aiohttp + PostgreSQL (Neon) – phù hợp Koyeb
-#
-# TẤT CẢ tin nhắn & comment: tiếng Việt.
 
 import logging
 import os
@@ -2666,3 +2664,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
