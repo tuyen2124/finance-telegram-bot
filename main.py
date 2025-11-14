@@ -28,6 +28,7 @@ from aiogram.types import (
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiogram.filters import Command, CommandStart
 
 import psycopg2
 import psycopg2.extras
@@ -2664,4 +2665,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
