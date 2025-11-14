@@ -18,9 +18,6 @@ from typing import Optional, Tuple
 
 from aiohttp import web
 from aiogram import Bot, Dispatcher, Router, F
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
-from aiogram.filters import CommandStart, Command
 from aiogram.types import (
     Message,
     CallbackQuery,
@@ -559,7 +556,7 @@ class Database:
                 INSERT INTO limits (user_id, category, period, limit_amount)
                 VALUES (%s, %s, %s, %s)
                 """,
-                (user_id, category, period, limit_amount),
+                (user_id, category, period),
             )
 
     def get_limit(self, user_id: int, category: str, period: str):
@@ -951,28 +948,28 @@ async def cmd_start(message: Message, state: FSMContext):
     wallet_lines = []
     for w in wallets[:3]:
         bal = db.get_wallet_balance(user_id, w["id"])
-        wallet_lines.append(f"• {w['name']}: `{bal:,.0f}`")
+        wallet_lines.append(f"• {w['name']}: {bal:,.0f}")
 
     wallet_text = "\n".join(wallet_lines) if wallet_lines else "Chưa có ví nào."
 
     text = (
-        f"Xin chào *{message.from_user.full_name}* 👋\n\n"
+        f"Xin chào {message.from_user.full_name} 👋\n\n"
         "Mình là bot quản lý tài chính cá nhân.\n\n"
-        "📊 *Tóm tắt nhanh hôm nay:*\n"
-        f"• Thu nhập: `{income_today:,.0f}`\n"
-        f"• Chi tiêu: `{expense_today:,.0f}`\n"
-        f"• Số dư (tổng thu - chi): `{total_balance:,.0f}`\n\n"
-        "💼 *Một vài ví gần đây:*\n"
+        "📊 Tóm tắt nhanh hôm nay:\n"
+        f"• Thu nhập: {income_today:,.0f}\n"
+        f"• Chi tiêu: {expense_today:,.0f}\n"
+        f"• Số dư (tổng thu - chi): {total_balance:,.0f}\n\n"
+        "💼 Một vài ví gần đây:\n"
         f"{wallet_text}\n\n"
         "Bạn có thể:\n"
-        "• Ghi *Thu nhập* hoặc *Chi tiêu* (hỗ trợ nhập kiểu `35k ăn sáng`)\n"
+        "• Ghi Thu nhập hoặc Chi tiêu (hỗ trợ nhập kiểu: 35k ăn sáng)\n"
         "• Ghi lương bằng /salary để tự chia 4-2-2-2 vào 4 ví\n"
-        "• Tạo & theo dõi *Mục tiêu tiết kiệm* (/goals, /goals_add)\n"
-        "• Xem *báo cáo* bằng /report hoặc /insights\n"
+        "• Tạo & theo dõi Mục tiêu tiết kiệm (/goals, /goals_add)\n"
+        "• Xem báo cáo bằng /report hoặc /insights\n"
         "• Xuất dữ liệu CSV bằng /export, /export_month, /export_wallet\n\n"
         "Dùng các nút bên dưới hoặc gõ /help để xem chi tiết."
     )
-    await message.answer(text, parse_mode=ParseMode.MARKDOWN, reply_markup=main_menu_kb())
+    await message.answer(text, reply_markup=main_menu_kb())
 
 
 # ---------- /help ----------
@@ -981,7 +978,7 @@ async def cmd_start(message: Message, state: FSMContext):
 @router.message(Command("help"))
 async def cmd_help(message: Message):
     text = (
-        "🆘 *Hướng dẫn sử dụng bot*\n\n"
+        "🆘 Hướng dẫn sử dụng bot\n\n"
         "Các lệnh chính:\n"
         "• /add – Thêm giao dịch Thu nhập / Chi tiêu\n"
         "• /salary – Ghi lương và tự chia 4-2-2-2 vào 4 ví\n"
@@ -1002,7 +999,7 @@ async def cmd_help(message: Message):
         "• /backup – Sao lưu dữ liệu của bạn (CSV)\n\n"
         "Bạn cũng có thể dùng menu nhanh bên dưới để thao tác."
     )
-    await message.answer(text, parse_mode=ParseMode.MARKDOWN, reply_markup=main_menu_kb())
+    await message.answer(text, reply_markup=main_menu_kb())
 
 
 # ---------- MENU REPLY BUTTONS ----------
@@ -1056,10 +1053,9 @@ async def cmd_add(message: Message, state: FSMContext):
     db.get_or_create_user(message.from_user.id, message.from_user.full_name)
     await state.set_state(AddTransactionStates.choosing_type)
     await message.answer(
-        "Bạn muốn ghi *Thu nhập* hay *Chi tiêu*?\n"
+        "Bạn muốn ghi Thu nhập hay Chi tiêu?\n"
         "Chọn bằng nút bên dưới:",
         reply_markup=income_expense_inline_kb(),
-        parse_mode=ParseMode.MARKDOWN,
     )
 
 
@@ -1070,12 +1066,11 @@ async def cb_add_tx_type(call: CallbackQuery, state: FSMContext):
     await state.set_state(AddTransactionStates.entering_amount_note)
     label = "Thu nhập" if tx_type == "income" else "Chi tiêu"
     await call.message.edit_text(
-        f"Nhập *{label}* theo dạng:\n"
-        "- `200000`\n"
-        "- `200k ăn trưa`\n"
-        "- `1.5tr tiền nhà`\n\n"
+        f"Nhập {label} theo dạng:\n"
+        "- 200000\n"
+        "- 200k ăn trưa\n"
+        "- 1.5tr tiền nhà\n\n"
         "Bạn chỉ cần gõ một dòng, mình sẽ tự hiểu số tiền và ghi chú.",
-        parse_mode=ParseMode.MARKDOWN,
     )
     await call.answer()
 
@@ -1086,12 +1081,11 @@ async def start_add_transaction(message: Message, state: FSMContext, tx_type: st
     await state.update_data(tx_type=tx_type)
     label = "Thu nhập" if tx_type == "income" else "Chi tiêu"
     await message.answer(
-        f"Nhập *{label}* theo dạng:\n"
-        "- `200000`\n"
-        "- `200k ăn trưa`\n"
-        "- `1.5tr tiền nhà`\n\n"
+        f"Nhập {label} theo dạng:\n"
+        "- 200000\n"
+        "- 200k ăn trưa\n"
+        "- 1.5tr tiền nhà\n\n"
         "Bạn chỉ cần gõ một dòng, mình sẽ tự hiểu số tiền và ghi chú.",
-        parse_mode=ParseMode.MARKDOWN,
     )
 
 
@@ -1105,7 +1099,7 @@ async def add_tx_amount_note(message: Message, state: FSMContext):
     except Exception:
         await message.answer(
             "❌ Không đọc được số tiền.\n"
-            "Bạn thử lại ví dụ: `35k ăn sáng`, `150000 tiền điện`, `1.2tr tiền nhà`."
+            "Bạn thử lại ví dụ: 35k ăn sáng, 150000 tiền điện, 1.2tr tiền nhà."
         )
         return
 
@@ -1135,10 +1129,9 @@ async def add_tx_amount_note(message: Message, state: FSMContext):
 
     await state.set_state(AddTransactionStates.choosing_category)
     await message.answer(
-        f"Số tiền: `{amount:,.0f}`\n"
+        f"Số tiền: {amount:,.0f}\n"
         f"Ghi chú: {note or 'Không có'}\n\n"
-        "Bây giờ hãy chọn hoặc nhập *Danh mục* cho giao dịch:",
-        parse_mode=ParseMode.MARKDOWN,
+        "Bây giờ hãy chọn hoặc nhập Danh mục cho giao dịch:",
         reply_markup=kb,
     )
 
@@ -1170,8 +1163,7 @@ async def add_tx_category(message: Message, state: FSMContext):
 
     await state.set_state(AddTransactionStates.choosing_wallet)
     await message.answer(
-        "Chọn *Ví* cho giao dịch này (ví mà bạn muốn tiền ra/vào):",
-        parse_mode=ParseMode.MARKDOWN,
+        "Chọn Ví cho giao dịch này (ví mà bạn muốn tiền ra/vào):",
         reply_markup=kb,
     )
 
@@ -1214,23 +1206,23 @@ async def add_tx_wallet(message: Message, state: FSMContext):
         limit = db.get_limit(user_id, category, "month")
         if limit is not None and spent > limit:
             warn_text = (
-                f"\n\n⚠️ *CẢNH BÁO:* Bạn đã *vượt hạn mức* chi cho danh mục *{category}* "
+                f"\n\n⚠️ CẢNH BÁO: Bạn đã vượt hạn mức chi cho danh mục {category} "
                 f"trong tháng này.\n"
-                f"Đã chi: `{spent:,.0f}` / Hạn mức: `{limit:,.0f}`"
+                f"Đã chi: {spent:,.0f} / Hạn mức: {limit:,.0f}"
             )
 
     label = "Thu nhập" if tx_type == "income" else "Chi tiêu"
     text = (
         f"✅ Đã ghi giao dịch #{tx_id}:\n\n"
-        f"• Loại: *{label}*\n"
-        f"• Số tiền: `{amount:,.0f}`\n"
-        f"• Danh mục: *{category}*\n"
-        f"• Ví: *{chosen['name']}*\n"
+        f"• Loại: {label}\n"
+        f"• Số tiền: {amount:,.0f}\n"
+        f"• Danh mục: {category}\n"
+        f"• Ví: {chosen['name']}\n"
         f"• Ghi chú: {note or 'Không có'}\n"
         + warn_text +
         "\n\nDùng /wallets để xem số dư từng ví, hoặc /transactions để sửa/xoá."
     )
-    await message.answer(text, parse_mode=ParseMode.MARKDOWN, reply_markup=main_menu_kb())
+    await message.answer(text, reply_markup=main_menu_kb())
 
 
 # ---------- /budget – Quy tắc 4-2-2-2 ----------
@@ -1240,9 +1232,8 @@ async def add_tx_wallet(message: Message, state: FSMContext):
 async def cmd_budget(message: Message, state: FSMContext):
     await state.set_state(BudgetStates.entering_income)
     await message.answer(
-        "💰 *Tính ngân sách 4-2-2-2*\n\n"
-        "Nhập *tổng lương / thu nhập hàng tháng* (ví dụ: `15tr`, `15000000`):",
-        parse_mode=ParseMode.MARKDOWN,
+        "💰 Tính ngân sách 4-2-2-2\n\n"
+        "Nhập tổng lương / thu nhập hàng tháng (ví dụ: 15tr, 15000000):",
     )
 
 
@@ -1254,7 +1245,7 @@ async def budget_income(message: Message, state: FSMContext):
         if total_income <= 0:
             raise ValueError()
     except Exception:
-        await message.answer("❌ Số tiền không hợp lệ, vui lòng nhập lại (ví dụ: `15tr`, `15000000`).")
+        await message.answer("❌ Số tiền không hợp lệ, vui lòng nhập lại (ví dụ: 15tr, 15000000).")
         return
 
     await state.clear()
@@ -1264,18 +1255,17 @@ async def budget_income(message: Message, state: FSMContext):
     personal = total_income * 0.2
 
     text = (
-        "📐 *Phân bổ lương theo quy tắc 4-2-2-2*\n\n"
-        f"• Tổng thu nhập: `{total_income:,.0f}`\n\n"
+        "📐 Phân bổ lương theo quy tắc 4-2-2-2\n\n"
+        f"• Tổng thu nhập: {total_income:,.0f}\n\n"
         "👉 Đề xuất phân bổ:\n"
-        f"• 40% Chi tiêu thiết yếu: `{essential:,.0f}`\n"
-        f"• 20% Tiết kiệm dài hạn: `{long_term:,.0f}`\n"
-        f"• 20% Đầu tư & Tự do tài chính: `{invest:,.0f}`\n"
-        f"• 20% Chi tiêu cá nhân & Phát triển: `{personal:,.0f}`\n\n"
-        "Bạn muốn *lưu lại* hay *tạo mục tiêu tiết kiệm* từ 2 khoản 20%?"
+        f"• 40% Chi tiêu thiết yếu: {essential:,.0f}\n"
+        f"• 20% Tiết kiệm dài hạn: {long_term:,.0f}\n"
+        f"• 20% Đầu tư & Tự do tài chính: {invest:,.0f}\n"
+        f"• 20% Chi tiêu cá nhân & Phát triển: {personal:,.0f}\n\n"
+        "Bạn muốn lưu lại hay tạo mục tiêu tiết kiệm từ 2 khoản 20%?"
     )
     await message.answer(
         text,
-        parse_mode=ParseMode.MARKDOWN,
         reply_markup=budget_after_calc_kb(total_income),
     )
 
@@ -1298,9 +1288,8 @@ async def cb_budget_note(call: CallbackQuery):
     db.save_budget(user_id, total, essential, long_term, invest, personal)
 
     await call.message.edit_text(
-        "✅ Đã lưu *ghi chú ngân sách 4-2-2-2*.\n\n"
+        "✅ Đã lưu ghi chú ngân sách 4-2-2-2.\n\n"
         "Bạn có thể tính lại bằng /budget bất cứ lúc nào.",
-        parse_mode=ParseMode.MARKDOWN,
     )
     await call.answer("Đã lưu ngân sách.")
 
@@ -1322,9 +1311,8 @@ async def cb_budget_goals(call: CallbackQuery):
     db.create_saving_goal(user_id, "Đầu tư & Tự do tài chính (4-2-2-2)", invest)
 
     await call.message.edit_text(
-        "✅ Đã tạo 2 *Mục tiêu tiết kiệm* từ 2 khoản 20%.\n"
+        "✅ Đã tạo 2 Mục tiêu tiết kiệm từ 2 khoản 20%.\n"
         "Dùng /goals để xem & nạp/rút tiền.",
-        parse_mode=ParseMode.MARKDOWN,
     )
     await call.answer("Đã tạo mục tiêu từ ngân sách.")
 
@@ -1337,9 +1325,8 @@ async def cmd_salary(message: Message, state: FSMContext):
     db.get_or_create_user(message.from_user.id, message.from_user.full_name)
     await state.set_state(SalaryStates.entering_amount)
     await message.answer(
-        "💵 *Ghi lương và tự chia vào 4 ví (4-2-2-2)*\n\n"
-        "Nhập *tổng lương/thu nhập* tháng này (ví dụ: `15tr`, `15000000`):",
-        parse_mode=ParseMode.MARKDOWN,
+        "💵 Ghi lương và tự chia vào 4 ví (4-2-2-2)\n\n"
+        "Nhập tổng lương/thu nhập tháng này (ví dụ: 15tr, 15000000):",
     )
 
 
@@ -1351,7 +1338,7 @@ async def salary_enter_amount(message: Message, state: FSMContext):
         if total <= 0:
             raise ValueError()
     except Exception:
-        await message.answer("❌ Số tiền không hợp lệ, nhập lại (ví dụ: `15tr`, `15000000`).")
+        await message.answer("❌ Số tiền không hợp lệ, nhập lại (ví dụ: 15tr, 15000000).")
         return
 
     await state.clear()
@@ -1412,14 +1399,14 @@ async def salary_enter_amount(message: Message, state: FSMContext):
 
     text = (
         "✅ Đã ghi lương và tự chia vào 4 ví theo 4-2-2-2:\n\n"
-        f"• Tổng lương: `{total:,.0f}`\n\n"
-        f"• {essential_w['name']}: `{essential:,.0f}` (40%)\n"
-        f"• {long_w['name']}: `{long_term:,.0f}` (20%)\n"
-        f"• {invest_w['name']}: `{invest:,.0f}` (20%)\n"
-        f"• {personal_w['name']}: `{personal:,.0f}` (20%)\n\n"
+        f"• Tổng lương: {total:,.0f}\n\n"
+        f"• {essential_w['name']}: {essential:,.0f} (40%)\n"
+        f"• {long_w['name']}: {long_term:,.0f} (20%)\n"
+        f"• {invest_w['name']}: {invest:,.0f} (20%)\n"
+        f"• {personal_w['name']}: {personal:,.0f} (20%)\n\n"
         "Dùng /wallets để xem số dư từng ví, và khi ghi chi tiêu/thu nhập, hãy chọn đúng ví tương ứng mục đích."
     )
-    await message.answer(text, parse_mode=ParseMode.MARKDOWN, reply_markup=main_menu_kb())
+    await message.answer(text, reply_markup=main_menu_kb())
 
 
 # ---------- /wallets – xem số dư ví ----------
@@ -1437,17 +1424,16 @@ async def cmd_wallets(message: Message):
         )
         return
 
-    lines = ["💼 *Các ví của bạn:*\n"]
+    lines = ["💼 Các ví của bạn:\n"]
     for w in wallets:
         bal = db.get_wallet_balance(user_id, w["id"])
         lines.append(
-            f"• #{w['id']} – *{w['name']}*\n"
-            f"  Số dư: `{bal:,.0f}`\n"
+            f"• #{w['id']} – {w['name']}\n"
+            f"  Số dư: {bal:,.0f}\n"
         )
 
     await message.answer(
         "\n".join(lines),
-        parse_mode=ParseMode.MARKDOWN,
         reply_markup=main_menu_kb(),
     )
 
@@ -1460,9 +1446,8 @@ async def cmd_wallets_add(message: Message, state: FSMContext):
     db.get_or_create_user(message.from_user.id, message.from_user.full_name)
     await state.set_state(WalletAddStates.entering_name)
     await message.answer(
-        "💼 *Tạo ví mới*\n\n"
-        "Nhập tên ví bạn muốn tạo (ví dụ: `Momo`, `Tiền mặt`, `Thẻ tín dụng`):",
-        parse_mode=ParseMode.MARKDOWN,
+        "💼 Tạo ví mới\n\n"
+        "Nhập tên ví bạn muốn tạo (ví dụ: Momo, Tiền mặt, Thẻ tín dụng):",
     )
 
 
@@ -1477,8 +1462,7 @@ async def wallets_add_enter_name(message: Message, state: FSMContext):
     db.add_wallet(user_id, name, purpose="")
     await state.clear()
     await message.answer(
-        f"✅ Đã tạo ví mới: *{name}*.\nDùng /wallets để xem danh sách ví.",
-        parse_mode=ParseMode.MARKDOWN,
+        f"✅ Đã tạo ví mới: {name}.\nDùng /wallets để xem danh sách ví.",
         reply_markup=main_menu_kb(),
     )
 
@@ -1513,9 +1497,8 @@ async def cmd_transfer(message: Message, state: FSMContext):
 
     await state.set_state(TransferStates.choosing_from_wallet)
     await message.answer(
-        "🔁 *Chuyển tiền giữa ví*\n\n"
-        "Bước 1: Chọn *ví nguồn* (ví bị trừ tiền):",
-        parse_mode=ParseMode.MARKDOWN,
+        "🔁 Chuyển tiền giữa ví\n\n"
+        "Bước 1: Chọn ví nguồn (ví bị trừ tiền):",
         reply_markup=kb,
     )
 
@@ -1552,8 +1535,7 @@ async def transfer_choose_from(message: Message, state: FSMContext):
 
     await state.set_state(TransferStates.choosing_to_wallet)
     await message.answer(
-        "Bước 2: Chọn *ví đích* (ví được cộng tiền):",
-        parse_mode=ParseMode.MARKDOWN,
+        "Bước 2: Chọn ví đích (ví được cộng tiền):",
         reply_markup=kb,
     )
 
@@ -1580,8 +1562,7 @@ async def transfer_choose_to(message: Message, state: FSMContext):
 
     await state.set_state(TransferStates.entering_amount)
     await message.answer(
-        "Bước 3: Nhập *số tiền cần chuyển* (ví dụ: `500k`, `1tr`, `1000000`):",
-        parse_mode=ParseMode.MARKDOWN,
+        "Bước 3: Nhập số tiền cần chuyển (ví dụ: 500k, 1tr, 1000000):",
         reply_markup=main_menu_kb(),
     )
 
@@ -1600,8 +1581,7 @@ async def transfer_enter_amount(message: Message, state: FSMContext):
     await state.update_data(amount=amount)
     await state.set_state(TransferStates.entering_note)
     await message.answer(
-        "Bước 4: Nhập ghi chú cho lần chuyển (hoặc gõ `-` nếu không có):",
-        parse_mode=ParseMode.MARKDOWN,
+        "Bước 4: Nhập ghi chú cho lần chuyển (hoặc gõ - nếu không có):",
     )
 
 
@@ -1641,11 +1621,10 @@ async def transfer_enter_note(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(
         "✅ Đã chuyển tiền giữa ví:\n\n"
-        f"• Từ: *{from_wallet['name']}*\n"
-        f"• Sang: *{to_wallet['name']}*\n"
-        f"• Số tiền: `{amount:,.0f}`\n"
+        f"• Từ: {from_wallet['name']}\n"
+        f"• Sang: {to_wallet['name']}\n"
+        f"• Số tiền: {amount:,.0f}\n"
         f"• Ghi chú: {note or 'Không có'}",
-        parse_mode=ParseMode.MARKDOWN,
         reply_markup=main_menu_kb(),
     )
 
@@ -1657,8 +1636,7 @@ async def transfer_enter_note(message: Message, state: FSMContext):
 async def cmd_report(message: Message):
     db.get_or_create_user(message.from_user.id, message.from_user.full_name)
     await message.answer(
-        "📊 *Báo cáo tài chính*\n\nChọn loại báo cáo:",
-        parse_mode=ParseMode.MARKDOWN,
+        "📊 Báo cáo tài chính\n\nChọn loại báo cáo:",
         reply_markup=report_menu_inline_kb(),
     )
 
@@ -1674,12 +1652,12 @@ async def cb_report_today(call: CallbackQuery):
     expense = data["expense"]
     balance = income - expense
     text = (
-        "📆 *Báo cáo hôm nay*\n\n"
-        f"• Thu nhập: `{income:,.0f}`\n"
-        f"• Chi tiêu: `{expense:,.0f}`\n"
-        f"• Chênh lệch: `{balance:,.0f}`"
+        "📆 Báo cáo hôm nay\n\n"
+        f"• Thu nhập: {income:,.0f}\n"
+        f"• Chi tiêu: {expense:,.0f}\n"
+        f"• Chênh lệch: {balance:,.0f}"
     )
-    await call.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=report_menu_inline_kb())
+    await call.message.edit_text(text, reply_markup=report_menu_inline_kb())
     await call.answer()
 
 
@@ -1693,12 +1671,12 @@ async def cb_report_7days(call: CallbackQuery):
     expense = data["expense"]
     balance = income - expense
     text = (
-        "📅 *Báo cáo 7 ngày qua*\n\n"
-        f"• Thu nhập: `{income:,.0f}`\n"
-        f"• Chi tiêu: `{expense:,.0f}`\n"
-        f"• Chênh lệch: `{balance:,.0f}`"
+        "📅 Báo cáo 7 ngày qua\n\n"
+        f"• Thu nhập: {income:,.0f}\n"
+        f"• Chi tiêu: {expense:,.0f}\n"
+        f"• Chênh lệch: {balance:,.0f}"
     )
-    await call.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=report_menu_inline_kb())
+    await call.message.edit_text(text, reply_markup=report_menu_inline_kb())
     await call.answer()
 
 
@@ -1715,12 +1693,12 @@ async def cb_report_month(call: CallbackQuery):
     expense = data["expense"]
     balance = income - expense
     text = (
-        "🗓 *Báo cáo tháng này*\n\n"
-        f"• Thu nhập: `{income:,.0f}`\n"
-        f"• Chi tiêu: `{expense:,.0f}`\n"
-        f"• Chênh lệch: `{balance:,.0f}`"
+        "🗓 Báo cáo tháng này\n\n"
+        f"• Thu nhập: {income:,.0f}\n"
+        f"• Chi tiêu: {expense:,.0f}\n"
+        f"• Chênh lệch: {balance:,.0f}"
     )
-    await call.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=report_menu_inline_kb())
+    await call.message.edit_text(text, reply_markup=report_menu_inline_kb())
     await call.answer()
 
 
@@ -1730,16 +1708,15 @@ async def cb_report_categories(call: CallbackQuery):
     today = date.today()
     rows = db.get_category_summary_month(user_id, today.year, today.month)
     if not rows:
-        text = "📊 *Thống kê theo danh mục (tháng này)*\n\nChưa có chi tiêu nào."
+        text = "📊 Thống kê theo danh mục (tháng này)\n\nChưa có chi tiêu nào."
         await call.message.edit_text(
             text,
-            parse_mode=ParseMode.MARKDOWN,
             reply_markup=report_menu_inline_kb(),
         )
         await call.answer()
         return
 
-    lines = ["📊 *Thống kê chi tiêu theo danh mục (tháng này)*\n"]
+    lines = ["📊 Thống kê chi tiêu theo danh mục (tháng này)\n"]
     max_val = max(r["total"] for r in rows) or 1
     BAR_WIDTH = 20
 
@@ -1748,17 +1725,16 @@ async def cb_report_categories(call: CallbackQuery):
         val = float(r["total"])
         bar_len = int(val / max_val * BAR_WIDTH) if max_val > 0 else 0
         bar = "█" * bar_len
-        lines.append(f"{cat:15} {bar} `{val:,.0f}`")
+        lines.append(f"{cat:15} {bar} {val:,.0f}")
 
     top3 = rows[:3]
-    lines.append("\n🔥 *Top 3 danh mục chi lớn nhất:*")
+    lines.append("\n🔥 Top 3 danh mục chi lớn nhất:")
     for i, r in enumerate(top3, start=1):
-        lines.append(f"{i}. {r['category']}: `{float(r['total']):,.0f}`")
+        lines.append(f"{i}. {r['category']}: {float(r['total']):,.0f}")
 
     text = "\n".join(lines)
     await call.message.edit_text(
         text,
-        parse_mode=ParseMode.MARKDOWN,
         reply_markup=report_menu_inline_kb(),
     )
     await call.answer()
@@ -1769,10 +1745,10 @@ async def cb_report_balance(call: CallbackQuery):
     user_id = db.get_or_create_user(call.from_user.id, call.from_user.full_name)
     balance = db.get_balance(user_id)
     text = (
-        "💼 *Số dư hiện tại (tổng thu nhập - tổng chi tiêu)*\n\n"
-        f"• Số dư ước tính: `{balance:,.0f}`"
+        "💼 Số dư hiện tại (tổng thu nhập - tổng chi tiêu)\n\n"
+        f"• Số dư ước tính: {balance:,.0f}"
     )
-    await call.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=report_menu_inline_kb())
+    await call.message.edit_text(text, reply_markup=report_menu_inline_kb())
     await call.answer()
 
 
@@ -1802,33 +1778,32 @@ async def cmd_insights(message: Message):
     today = date.today()
     cats = db.get_category_summary_month(user_id, today.year, today.month)
 
-    lines = ["📈 *Phân tích chi tiêu (insights)*\n"]
+    lines = ["📈 Phân tích chi tiêu (insights)\n"]
     lines.append(
-        f"• 30 ngày gần nhất: Chi tiêu `{recent_exp:,.0f}`\n"
-        f"• 30 ngày trước đó: `{prev_exp:,.0f}`"
+        f"• 30 ngày gần nhất: Chi tiêu {recent_exp:,.0f}\n"
+        f"• 30 ngày trước đó: {prev_exp:,.0f}"
     )
 
     if diff != 0:
         lines.append(
-            f"➡️ Bạn đang chi *{trend}* khoảng `{diff_abs:,.0f}` so với 30 ngày trước."
+            f"➡️ Bạn đang chi {trend} khoảng {diff_abs:,.0f} so với 30 ngày trước."
         )
     else:
-        lines.append("➡️ Chi tiêu của bạn *gần như không đổi* so với 30 ngày trước.")
+        lines.append("➡️ Chi tiêu của bạn gần như không đổi so với 30 ngày trước.")
 
     if cats:
-        lines.append("\n🔥 *Danh mục chi nhiều nhất tháng này:*")
+        lines.append("\n🔥 Danh mục chi nhiều nhất tháng này:")
         top = cats[0]
-        lines.append(f"• {top['category']}: `{float(top['total']):,.0f}`")
+        lines.append(f"• {top['category']}: {float(top['total']):,.0f}")
         if len(cats) >= 3:
             lines.append("\n📌 Gợi ý:")
             lines.append(
-                f"- Theo dõi kỹ danh mục *{top['category']}* trong vài tuần tới.\n"
+                f"- Theo dõi kỹ danh mục {top['category']} trong vài tuần tới.\n"
                 "- Cân nhắc đặt hạn mức bằng /limit nếu bạn thấy mục này hay bị vượt."
             )
 
     await message.answer(
         "\n".join(lines),
-        parse_mode=ParseMode.MARKDOWN,
         reply_markup=main_menu_kb(),
     )
 
@@ -1848,14 +1823,13 @@ async def cmd_goals(message: Message, state: FSMContext):
             ]
         )
         await message.answer(
-            "🎯 *Mục tiêu tiết kiệm*\n\n"
+            "🎯 Mục tiêu tiết kiệm\n\n"
             "Hiện bạn chưa có mục tiêu nào.\n"
             "Dùng /goals_add hoặc bấm nút dưới để tạo mới.",
-            parse_mode=ParseMode.MARKDOWN,
             reply_markup=kb,
         )
         return
-    lines = ["🎯 *Danh sách mục tiêu tiết kiệm*\n"]
+    lines = ["🎯 Danh sách mục tiêu tiết kiệm\n"]
     for g in goals:
         goal_id = g["id"]
         name = g["name"]
@@ -1863,12 +1837,11 @@ async def cmd_goals(message: Message, state: FSMContext):
         current = float(g["current_amount"])
         percent = (current / target * 100) if target > 0 else 0
         lines.append(
-            f"• #{goal_id} – *{name}*\n"
-            f"  Tiến độ: `{current:,.0f} / {target:,.0f}` (~{percent:.1f}%)\n"
+            f"• #{goal_id} – {name}\n"
+            f"  Tiến độ: {current:,.0f} / {target:,.0f} (~{percent:.1f}%)\n"
         )
     await message.answer(
         "\n".join(lines),
-        parse_mode=ParseMode.MARKDOWN,
         reply_markup=goals_inline_kb(goals),
     )
 
@@ -1877,9 +1850,8 @@ async def cmd_goals(message: Message, state: FSMContext):
 async def cmd_goals_add(message: Message, state: FSMContext):
     await state.set_state(CreateGoalStates.entering_name)
     await message.answer(
-        "🎯 Tạo *Mục tiêu tiết kiệm* mới\n\n"
-        "Bước 1: Nhập *tên mục tiêu* (ví dụ: \"Quỹ khẩn cấp 6 tháng\", \"Du lịch Nhật Bản\").",
-        parse_mode=ParseMode.MARKDOWN,
+        "🎯 Tạo Mục tiêu tiết kiệm mới\n\n"
+        "Bước 1: Nhập tên mục tiêu (ví dụ: Quỹ khẩn cấp 6 tháng, Du lịch Nhật Bản).",
     )
 
 
@@ -1887,9 +1859,8 @@ async def cmd_goals_add(message: Message, state: FSMContext):
 async def cb_goal_create_new(call: CallbackQuery, state: FSMContext):
     await state.set_state(CreateGoalStates.entering_name)
     await call.message.edit_text(
-        "🎯 Tạo *Mục tiêu tiết kiệm* mới\n\n"
-        "Bước 1: Nhập *tên mục tiêu* (ví dụ: \"Quỹ khẩn cấp\", \"Du lịch Nhật Bản\").",
-        parse_mode=ParseMode.MARKDOWN,
+        "🎯 Tạo Mục tiêu tiết kiệm mới\n\n"
+        "Bước 1: Nhập tên mục tiêu (ví dụ: Quỹ khẩn cấp, Du lịch Nhật Bản).",
     )
     await call.answer()
 
@@ -1903,8 +1874,7 @@ async def goal_enter_name(message: Message, state: FSMContext):
     await state.update_data(goal_name=name)
     await state.set_state(CreateGoalStates.entering_target)
     await message.answer(
-        "Bước 2: Nhập *số tiền cần đạt* (ví dụ: `50tr`, `50000000`):",
-        parse_mode=ParseMode.MARKDOWN,
+        "Bước 2: Nhập số tiền cần đạt (ví dụ: 50tr, 50000000):",
     )
 
 
@@ -1916,7 +1886,7 @@ async def goal_enter_target(message: Message, state: FSMContext):
         if target <= 0:
             raise ValueError()
     except Exception:
-        await message.answer("❌ Số tiền không hợp lệ, vui lòng nhập lại (ví dụ: `50tr`, `50000000`).")
+        await message.answer("❌ Số tiền không hợp lệ, vui lòng nhập lại (ví dụ: 50tr, 50000000).")
         return
     data = await state.get_data()
     name = data["goal_name"]
@@ -1924,9 +1894,8 @@ async def goal_enter_target(message: Message, state: FSMContext):
     db.create_saving_goal(user_id, name, target)
     await state.clear()
     await message.answer(
-        f"✅ Đã tạo mục tiêu *{name}* với số tiền cần đạt `{target:,.0f}`.\n"
+        f"✅ Đã tạo mục tiêu {name} với số tiền cần đạt {target:,.0f}.\n"
         "Dùng /goals để xem danh sách và nạp/rút tiền.",
-        parse_mode=ParseMode.MARKDOWN,
         reply_markup=main_menu_kb(),
     )
 
@@ -1945,9 +1914,8 @@ async def cb_goal_deposit(call: CallbackQuery, state: FSMContext):
     }
     await state.set_state(GoalMoneyStates.entering_amount)
     await call.message.edit_text(
-        f"➕ *Gửi tiền* vào mục tiêu *{goal['name']}*\n\n"
-        "Nhập số tiền (ví dụ: `1tr`, `1000000`):",
-        parse_mode=ParseMode.MARKDOWN,
+        f"➕ Gửi tiền vào mục tiêu {goal['name']}\n\n"
+        "Nhập số tiền (ví dụ: 1tr, 1000000):",
     )
     await call.answer()
 
@@ -1966,9 +1934,8 @@ async def cb_goal_withdraw(call: CallbackQuery, state: FSMContext):
     }
     await state.set_state(GoalMoneyStates.entering_amount)
     await call.message.edit_text(
-        f"➖ *Rút tiền* từ mục tiêu *{goal['name']}*\n\n"
-        "Nhập số tiền (ví dụ: `500k`, `500000`):",
-        parse_mode=ParseMode.MARKDOWN,
+        f"➖ Rút tiền từ mục tiêu {goal['name']}\n\n"
+        "Nhập số tiền (ví dụ: 500k, 500000):",
     )
     await call.answer()
 
@@ -1991,8 +1958,7 @@ async def goal_money_amount(message: Message, state: FSMContext):
     await state.update_data(amount=amount)
     await state.set_state(GoalMoneyStates.entering_note)
     await message.answer(
-        "Nhập ghi chú cho lần gửi/rút (hoặc gõ `-` nếu không có):",
-        parse_mode=ParseMode.MARKDOWN,
+        "Nhập ghi chú cho lần gửi/rút (hoặc gõ - nếu không có):",
     )
 
 
@@ -2021,25 +1987,25 @@ async def goal_money_note(message: Message, state: FSMContext):
         db.update_goal_amount(goal["id"], new_amount)
         db.add_goal_transaction(goal["id"], "deposit", amount, note)
         msg = (
-            f"✅ Đã *gửi* `{amount:,.0f}` vào mục tiêu *{goal['name']}*.\n"
-            f"Số tiền hiện tại: `{new_amount:,.0f} / {float(goal['target_amount']):,.0f}`"
+            f"✅ Đã gửi {amount:,.0f} vào mục tiêu {goal['name']}.\n"
+            f"Số tiền hiện tại: {new_amount:,.0f} / {float(goal['target_amount']):,.0f}"
         )
     else:
         if amount > current:
             await message.answer(
-                f"❌ Bạn chỉ có thể rút tối đa `{current:,.0f}` (số đang có trong mục tiêu)."
+                f"❌ Bạn chỉ có thể rút tối đa {current:,.0f} (số đang có trong mục tiêu)."
             )
             return
         new_amount = current - amount
         db.update_goal_amount(goal["id"], new_amount)
         db.add_goal_transaction(goal["id"], "withdraw", amount, note)
         msg = (
-            f"✅ Đã *rút* `{amount:,.0f}` từ mục tiêu *{goal['name']}*.\n"
-            f"Số tiền còn lại: `{new_amount:,.0f} / {float(goal['target_amount']):,.0f}`"
+            f"✅ Đã rút {amount:,.0f} từ mục tiêu {goal['name']}.\n"
+            f"Số tiền còn lại: {new_amount:,.0f} / {float(goal['target_amount']):,.0f}"
         )
     await state.clear()
     user_goal_action_context.pop(message.from_user.id, None)
-    await message.answer(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=main_menu_kb())
+    await message.answer(msg, reply_markup=main_menu_kb())
 
 
 # ---------- /transactions – xem & sửa/xoá ----------
@@ -2051,21 +2017,20 @@ async def cmd_transactions(message: Message):
     rows = db.get_recent_transactions(user_id, limit=5)
     if not rows:
         await message.answer(
-            "💰 *Giao dịch gần đây*\n\nChưa có giao dịch nào.\nDùng /add hoặc các nút Thu nhập / Chi tiêu để thêm.",
-            parse_mode=ParseMode.MARKDOWN,
+            "💰 Giao dịch gần đây\n\nChưa có giao dịch nào.\nDùng /add hoặc các nút Thu nhập / Chi tiêu để thêm.",
         )
         return
-    lines = ["💰 *5 giao dịch gần nhất*:\n"]
+    lines = ["💰 5 giao dịch gần nhất:\n"]
     for r in rows:
         s_type = "➕" if r["type"] == "income" else "➖"
         created = r["created_at"].isoformat()[:16].replace("T", " ")
         lines.append(
-            f"#{r['id']} {s_type} `{float(r['amount']):,.0f}` – *{r['category']}*\n"
+            f"#{r['id']} {s_type} {float(r['amount']):,.0f} – {r['category']}\n"
             f"   {r['note'] or 'Không ghi chú'}\n"
-            f"   _{created} UTC_\n"
+            f"   {created} UTC\n"
         )
-    text = "\n".join(lines) + "\nChạm vào nút dưới mỗi giao dịch để *sửa* hoặc *xoá*."
-    await message.answer(text, parse_mode=ParseMode.MARKDOWN)
+    text = "\n".join(lines) + "\nChạm vào nút dưới mỗi giao dịch để sửa hoặc xoá."
+    await message.answer(text)
     for r in rows:
         s_type = "Thu nhập" if r["type"] == "income" else "Chi tiêu"
         wallet_name = ""
@@ -2073,15 +2038,14 @@ async def cmd_transactions(message: Message):
             w = db.get_wallet(user_id, r["wallet_id"])
             wallet_name = w["name"] if w else ""
         msg = (
-            f"#{r['id']} – *{s_type}*\n"
-            f"Số tiền: `{float(r['amount']):,.0f}`\n"
-            f"Danh mục: *{r['category']}*\n"
-            f"Ví: *{wallet_name or 'Không xác định'}*\n"
+            f"#{r['id']} – {s_type}\n"
+            f"Số tiền: {float(r['amount']):,.0f}\n"
+            f"Danh mục: {r['category']}\n"
+            f"Ví: {wallet_name or 'Không xác định'}\n"
             f"Ghi chú: {r['note'] or 'Không có'}"
         )
         await message.answer(
             msg,
-            parse_mode=ParseMode.MARKDOWN,
             reply_markup=transactions_inline_kb(r["id"]),
         )
 
@@ -2098,7 +2062,6 @@ async def cb_tx_delete(call: CallbackQuery):
     db.delete_transaction(user_id, tx_id)
     await call.message.edit_text(
         f"🗑 Đã xoá giao dịch #{tx_id}.",
-        parse_mode=ParseMode.MARKDOWN,
     )
     await call.answer("Đã xoá giao dịch.")
 
@@ -2128,12 +2091,11 @@ async def cb_tx_edit(call: CallbackQuery, state: FSMContext):
         ]
     )
     await call.message.edit_text(
-        f"✏️ *Sửa giao dịch #{tx_id}*\n\n"
-        f"Số tiền hiện tại: `{float(tx['amount']):,.0f}`\n"
-        f"Danh mục: *{tx['category']}*\n"
+        f"✏️ Sửa giao dịch #{tx_id}\n\n"
+        f"Số tiền hiện tại: {float(tx['amount']):,.0f}\n"
+        f"Danh mục: {tx['category']}\n"
         f"Ghi chú: {tx['note'] or 'Không có'}\n\n"
         "Chọn phần bạn muốn sửa:",
-        parse_mode=ParseMode.MARKDOWN,
         reply_markup=kb,
     )
     await call.answer()
@@ -2152,18 +2114,15 @@ async def cb_edit_field(call: CallbackQuery, state: FSMContext):
 
     if field == "amount":
         await call.message.edit_text(
-            "Nhập *số tiền mới* cho giao dịch (ví dụ: `200k`, `1.5tr`, `200000`):",
-            parse_mode=ParseMode.MARKDOWN,
+            "Nhập số tiền mới cho giao dịch (ví dụ: 200k, 1.5tr, 200000):",
         )
     elif field == "category":
         await call.message.edit_text(
-            "Nhập *danh mục mới* cho giao dịch:",
-            parse_mode=ParseMode.MARKDOWN,
+            "Nhập danh mục mới cho giao dịch:",
         )
     else:
         await call.message.edit_text(
-            "Nhập *ghi chú mới* cho giao dịch (hoặc `-` để xoá ghi chú):",
-            parse_mode=ParseMode.MARKDOWN,
+            "Nhập ghi chú mới cho giao dịch (hoặc - để xoá ghi chú):",
         )
     await call.answer()
 
@@ -2193,24 +2152,24 @@ async def edit_tx_field_value(message: Message, state: FSMContext):
             await message.answer("❌ Số tiền không hợp lệ, vui lòng nhập lại.")
             return
         db.update_transaction_amount(user_id, tx_id, amount)
-        msg = f"✅ Đã cập nhật *số tiền* giao dịch #{tx_id} thành `{amount:,.0f}`."
+        msg = f"✅ Đã cập nhật số tiền giao dịch #{tx_id} thành {amount:,.0f}."
     elif field == "category":
         category = message.text.strip()
         if not category:
             await message.answer("❌ Danh mục không được để trống.")
             return
         db.update_transaction_category(user_id, tx_id, category)
-        msg = f"✅ Đã cập nhật *danh mục* giao dịch #{tx_id} thành *{category}*."
+        msg = f"✅ Đã cập nhật danh mục giao dịch #{tx_id} thành {category}."
     else:
         note = message.text.strip()
         if note == "-":
             note = ""
         db.update_transaction_note(user_id, tx_id, note)
-        msg = f"✅ Đã cập nhật *ghi chú* giao dịch #{tx_id}."
+        msg = f"✅ Đã cập nhật ghi chú giao dịch #{tx_id}."
 
     await state.clear()
     user_edit_tx_context.pop(message.from_user.id, None)
-    await message.answer(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=main_menu_kb())
+    await message.answer(msg, reply_markup=main_menu_kb())
 
 
 # ---------- /categories – quản lý danh mục ----------
@@ -2224,7 +2183,7 @@ async def cmd_categories(message: Message, state: FSMContext):
     if not rows:
         db.ensure_default_categories(user_id)
         rows = db.get_categories(user_id)
-    lines = ["📝 *Danh mục thu/chi của bạn:*\n"]
+    lines = ["📝 Danh mục thu/chi của bạn:\n"]
     for r in rows:
         icon = "➖" if r["type"] == "expense" else "➕"
         lines.append(f"{icon} {r['name']}")
@@ -2236,7 +2195,7 @@ async def cmd_categories(message: Message, state: FSMContext):
             ]
         ]
     )
-    await message.answer("\n".join(lines), parse_mode=ParseMode.MARKDOWN, reply_markup=kb)
+    await message.answer("\n".join(lines), reply_markup=kb)
 
 
 @router.callback_query(F.data == "cat_add")
@@ -2251,8 +2210,7 @@ async def cb_cat_add(call: CallbackQuery, state: FSMContext):
         ]
     )
     await call.message.edit_text(
-        "Chọn loại danh mục bạn muốn *thêm*:",
-        parse_mode=ParseMode.MARKDOWN,
+        "Chọn loại danh mục bạn muốn thêm:",
         reply_markup=kb,
     )
     await call.answer()
@@ -2265,8 +2223,7 @@ async def cb_cat_type(call: CallbackQuery, state: FSMContext):
     await state.set_state(CategoryStates.entering_name)
     label = "Thu nhập" if cat_type == "income" else "Chi tiêu"
     await call.message.edit_text(
-        f"Nhập *tên danh mục* mới cho {label} (ví dụ: \"Freelance\", \"Đầu tư\", \"Con cái\"):",
-        parse_mode=ParseMode.MARKDOWN,
+        f"Nhập tên danh mục mới cho {label} (ví dụ: Freelance, Đầu tư, Con cái):",
     )
     await call.answer()
 
@@ -2283,8 +2240,7 @@ async def cat_enter_name(message: Message, state: FSMContext):
     db.add_category(user_id, name, cat_type)
     await state.clear()
     await message.answer(
-        f"✅ Đã thêm danh mục *{name}* ({'Thu nhập' if cat_type == 'income' else 'Chi tiêu'}).",
-        parse_mode=ParseMode.MARKDOWN,
+        f"✅ Đã thêm danh mục {name} ({'Thu nhập' if cat_type == 'income' else 'Chi tiêu'}).",
         reply_markup=main_menu_kb(),
     )
 
@@ -2309,8 +2265,7 @@ async def cb_cat_delete_mode(call: CallbackQuery):
         )
     kb = InlineKeyboardMarkup(inline_keyboard=buttons)
     await call.message.edit_text(
-        "Chọn danh mục bạn muốn *xoá* (chỉ nên xoá nếu chắc chắn):",
-        parse_mode=ParseMode.MARKDOWN,
+        "Chọn danh mục bạn muốn xoá (chỉ nên xoá nếu chắc chắn):",
         reply_markup=kb,
     )
     await call.answer()
@@ -2324,7 +2279,6 @@ async def cb_cat_delete(call: CallbackQuery):
     db.delete_category(user_id, cat_id)
     await call.message.edit_text(
         "🗑 Đã xoá danh mục. Những giao dịch cũ vẫn giữ nguyên tên danh mục cũ.",
-        parse_mode=ParseMode.MARKDOWN,
     )
     await call.answer("Đã xoá danh mục.")
 
@@ -2348,9 +2302,8 @@ async def cmd_limit(message: Message, state: FSMContext):
         buttons.append(row)
     kb = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True, one_time_keyboard=True)
     await message.answer(
-        "⚙️ *Đặt hạn mức chi tiêu theo tháng*\n\n"
-        "Chọn hoặc nhập *Danh mục chi tiêu* bạn muốn đặt hạn mức:",
-        parse_mode=ParseMode.MARKDOWN,
+        "⚙️ Đặt hạn mức chi tiêu theo tháng\n\n"
+        "Chọn hoặc nhập Danh mục chi tiêu bạn muốn đặt hạn mức:",
         reply_markup=kb,
     )
 
@@ -2364,9 +2317,7 @@ async def limit_choose_category(message: Message, state: FSMContext):
     await state.update_data(category=category)
     await state.set_state(LimitStates.entering_amount)
     await message.answer(
-        f"Nhập *hạn mức chi tiêu tháng* cho danh mục *{category}* "
-        "(ví dụ: `2tr`, `2000000`):",
-        parse_mode=ParseMode.MARKDOWN,
+        f"Nhập hạn mức chi tiêu tháng cho danh mục {category} (ví dụ: 2tr, 2000000):",
         reply_markup=main_menu_kb(),
     )
 
@@ -2387,9 +2338,8 @@ async def limit_enter_amount(message: Message, state: FSMContext):
     db.set_limit(user_id, category, "month", amount)
     await state.clear()
     await message.answer(
-        f"✅ Đã đặt hạn mức chi tiêu tháng cho *{category}*: `{amount:,.0f}`.\n"
+        f"✅ Đã đặt hạn mức chi tiêu tháng cho {category}: {amount:,.0f}.\n"
         "Khi bạn ghi chi tiêu vượt hạn mức này, mình sẽ nhắc bạn ngay 😉",
-        parse_mode=ParseMode.MARKDOWN,
         reply_markup=main_menu_kb(),
     )
 
@@ -2456,10 +2406,9 @@ async def cmd_export(message: Message):
     await message.answer_document(
         document=buf,
         caption=(
-            "📤 Đây là file *CSV* chứa toàn bộ giao dịch của bạn.\n"
-            "Bạn có thể mở bằng *Excel*, *Google Sheets* hoặc bất kỳ ứng dụng bảng tính nào."
+            "📤 Đây là file CSV chứa toàn bộ giao dịch của bạn.\n"
+            "Bạn có thể mở bằng Excel, Google Sheets hoặc bất kỳ ứng dụng bảng tính nào."
         ),
-        parse_mode=ParseMode.MARKDOWN,
         reply_markup=main_menu_kb(),
     )
 
@@ -2472,12 +2421,11 @@ async def cmd_export_month(message: Message, state: FSMContext):
     db.get_or_create_user(message.from_user.id, message.from_user.full_name)
     await state.set_state(ExportMonthStates.entering_period)
     await message.answer(
-        "📤 *Xuất CSV theo tháng*\n\n"
+        "📤 Xuất CSV theo tháng\n\n"
         "Nhập tháng bạn muốn xuất theo một trong các cách:\n"
-        "• `03-2025` hoặc `3-2025`\n"
-        "• `03/2025` hoặc `3/2025`\n"
-        "• Hoặc gõ: `tháng này`",
-        parse_mode=ParseMode.MARKDOWN,
+        "• 03-2025 hoặc 3-2025\n"
+        "• 03/2025 hoặc 3/2025\n"
+        "• Hoặc gõ: tháng này",
         reply_markup=main_menu_kb(),
     )
 
@@ -2495,7 +2443,7 @@ async def export_month_enter_period(message: Message, state: FSMContext):
         if not m:
             await message.answer(
                 "❌ Định dạng không hợp lệ.\n"
-                "Vui lòng nhập lại, ví dụ: `03-2025`, `3/2025` hoặc `tháng này`.",
+                "Vui lòng nhập lại, ví dụ: 03-2025, 3/2025 hoặc tháng này.",
                 reply_markup=main_menu_kb(),
             )
             return
@@ -2527,10 +2475,9 @@ async def export_month_enter_period(message: Message, state: FSMContext):
     await message.answer_document(
         document=buf,
         caption=(
-            f"📤 Đây là file *CSV* giao dịch tháng {month:02d}/{year}.\n"
-            "Bạn có thể mở bằng *Excel*, *Google Sheets* hoặc bất kỳ ứng dụng bảng tính nào."
+            f"📤 Đây là file CSV giao dịch tháng {month:02d}/{year}.\n"
+            "Bạn có thể mở bằng Excel, Google Sheets hoặc bất kỳ ứng dụng bảng tính nào."
         ),
-        parse_mode=ParseMode.MARKDOWN,
         reply_markup=main_menu_kb(),
     )
 
@@ -2565,9 +2512,8 @@ async def cmd_export_wallet(message: Message):
     kb = InlineKeyboardMarkup(inline_keyboard=buttons)
 
     await message.answer(
-        "📤 *Xuất CSV theo từng ví*\n\n"
-        "Chọn *ví* bạn muốn xuất dữ liệu:",
-        parse_mode=ParseMode.MARKDOWN,
+        "📤 Xuất CSV theo từng ví\n\n"
+        "Chọn ví bạn muốn xuất dữ liệu:",
         reply_markup=kb,
     )
 
@@ -2591,8 +2537,7 @@ async def cb_export_wallet(call: CallbackQuery):
 
     if not rows:
         await call.message.edit_text(
-            f"📤 Ví *{wallet['name']}* hiện chưa có giao dịch nào để xuất.",
-            parse_mode=ParseMode.MARKDOWN,
+            f"📤 Ví {wallet['name']} hiện chưa có giao dịch nào để xuất.",
         )
         await call.answer()
         return
@@ -2605,17 +2550,15 @@ async def cb_export_wallet(call: CallbackQuery):
     )
 
     await call.message.edit_text(
-        f"📤 Đang gửi file CSV cho ví *{wallet['name']}*...",
-        parse_mode=ParseMode.MARKDOWN,
+        f"📤 Đang gửi file CSV cho ví {wallet['name']}...",
     )
 
     await call.message.answer_document(
         document=buf,
         caption=(
-            f"📤 Đây là file *CSV* giao dịch của ví *{wallet['name']}*.\n"
-            "Bạn có thể mở bằng *Excel*, *Google Sheets* hoặc bất kỳ ứng dụng bảng tính nào."
+            f"📤 Đây là file CSV giao dịch của ví {wallet['name']}.\n"
+            "Bạn có thể mở bằng Excel, Google Sheets hoặc bất kỳ ứng dụng bảng tính nào."
         ),
-        parse_mode=ParseMode.MARKDOWN,
         reply_markup=main_menu_kb(),
     )
     await call.answer()
@@ -2627,7 +2570,7 @@ async def cb_export_wallet(call: CallbackQuery):
 @router.message(Command("backup"))
 async def cmd_backup(message: Message):
     """
-    Sao lưu dữ liệu của *chính user này* thành 1 file CSV (tương tự /export).
+    Sao lưu dữ liệu của chính user này thành 1 file CSV (tương tự /export).
     Dùng khi bạn muốn backup riêng cho mình (Neon vẫn là DB chính).
     """
     user_id = db.get_or_create_user(message.from_user.id, message.from_user.full_name)
@@ -2649,10 +2592,9 @@ async def cmd_backup(message: Message):
     await message.answer_document(
         document=buf,
         caption=(
-            "📦 Đây là file *backup CSV* chứa toàn bộ giao dịch của bạn.\n"
+            "📦 Đây là file backup CSV chứa toàn bộ giao dịch của bạn.\n"
             "Hãy lưu ở nơi an toàn (Drive, cloud,...) để dự phòng."
         ),
-        parse_mode=ParseMode.MARKDOWN,
         reply_markup=main_menu_kb(),
     )
 
@@ -2667,8 +2609,8 @@ async def fallback_handler(message: Message):
         await message.answer(
             "Mình đoán bạn đang muốn ghi thu/chi 🤔\n\n"
             "Bạn có thể:\n"
-            "• Bấm *➕ Thu nhập* hoặc *➖ Chi tiêu* trên menu\n"
-            "• Hoặc dùng lệnh /add rồi nhập kiểu: `35k ăn sáng`, `1.2tr tiền nhà`.\n\n"
+            "• Bấm ➕ Thu nhập hoặc ➖ Chi tiêu trên menu\n"
+            "• Hoặc dùng lệnh /add rồi nhập kiểu: 35k ăn sáng, 1.2tr tiền nhà.\n\n"
             "Gõ /help để xem hướng dẫn chi tiết.",
             reply_markup=main_menu_kb(),
         )
@@ -2701,7 +2643,8 @@ def create_app() -> web.Application:
     dp.include_router(router)
     dp.startup.register(on_startup)
 
-    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    # Không set parse_mode mặc định để tránh lỗi parse Markdown/HTML
+    bot = Bot(token=BOT_TOKEN)
 
     app = web.Application()
     webhook_handler = SimpleRequestHandler(dispatcher=dp, bot=bot)
